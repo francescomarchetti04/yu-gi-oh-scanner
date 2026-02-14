@@ -1,6 +1,6 @@
 package YGOscanner.camera;
 
-import android.graphics.Bitmap;
+//import android.graphics.Bitmap;
 
 public class CameraControlModule {
 

@@ -1,5 +1,9 @@
 package YGOscanner.recognition;
-import android.graphics.Bitmap;
+
+//import android.graphics.Bitmap;
+
+import YGOscanner.camera.Bitmap;
+
 
 public class RecognitionModule {
 

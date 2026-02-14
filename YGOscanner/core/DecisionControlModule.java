@@ -1,5 +1,6 @@
 package YGOscanner.core;
-package YGOscanner;
+
+import YGOscanner.recognition.CardResult;
 
 public class  DecisionControlModule{
 

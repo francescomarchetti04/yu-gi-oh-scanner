@@ -1,6 +1,6 @@
 package YGOscanner.core;
 
-import audio.AudioEvent;
+import YGOscanner.audio.AudioEvent;
 
 import java.util.List;
 import java.util.ArrayList;
