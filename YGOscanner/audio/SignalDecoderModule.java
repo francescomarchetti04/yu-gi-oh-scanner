@@ -1,50 +1,67 @@
 package YGOscanner.audio;
 
-public class  SignalDecoderModule{
+public class SignalDecoderModule {
 
     private Complex[] fftResult;
-    private double samplingRate = 44100.0; // Valore tipico per il jack
-    private double lastMaxMagnitude = 0.0; // Variabile di classe per salvare la forza del segnale
+    private double samplingRate = 44100.0;
+    private double lastMaxMagnitude = 0.0;
     private long lastEventTime = 0;
     private AudioEvent lastEvent = null;
+    
+    // Parametri Stabilità e Debounce
     private static final long DEBOUNCE_MS = 200;
     private long stableStartTime = 0;
-    private static final long STABLE_TIME_MS = 300; // tempo richiesto per stabilità
+    private static final long STABLE_TIME_MS = 300;
     private boolean inStableCandidate = false;
 
-    
-    public void processAudioFrame(short[] pcm) {
-        // FFT + picco frequenza
-        /**
-     * Metodo principale: riceve l'audio dal jack, lo stabilizza e calcola la FFT.
+    /**
+     * Calcola il livello RMS partendo dai BYTE.
+     * Usato per decidere se il segnale è abbastanza forte (lastMaxMagnitude).
      */
-            // 1. STABILIZZAZIONE LUNGHEZZA (Zero-Padding per potenza di 2)
-        int originalN = pcm.length;
-        int n = 1;
-        while (n < originalN) n <<= 1; 
+    public double getLevel(byte[] buffer, int bytesRead) {
+        long sum = 0;
+        int samples = bytesRead / 2;
 
-        // 2. PREPARAZIONE DATI (Normalizzazione + Hamming Window)
-        Complex[] x = new Complex[n];
-        for (int i = 0; i < n; i++) {
-            if (i < originalN) {
-                double normalized = pcm[i] / 32768.0;
-                // Finestra di Hamming per pulire il segnale
-                double window = 0.54 - 0.46 * Math.cos(2 * Math.PI * i / (originalN - 1));
-                x[i] = new Complex(normalized * window, 0);
-            } else {
-                x[i] = new Complex(0, 0); // Padding con zeri
-            }
+        for (int i = 0; i < samples; i++) {
+            // Conversione Bitwise Little Endian
+            short sample = (short) ((buffer[2 * i] & 0xFF) | (buffer[2 * i + 1] << 8));
+            sum += (long) sample * sample;
         }
 
-        // 3. CALCOLO FFT
-        fftResult = fft(x);
-
-        // Ora puoi usare fftResult per l'analisi (es. cercare il picco a 1kHz)
+        if (samples == 0) return 0;
+        return Math.sqrt((double) sum / samples);
     }
 
     /**
-     * Algoritmo FFT Cooley-Tukey (Ricorsivo)
+     * VERSIONE AGGIORNATA: Riceve i byte, li converte internamente in campioni 
+     * normalizzati e calcola la FFT.
      */
+    public void processAudioFrame(byte[] byteBuffer, int bytesRead) {
+        int originalN = bytesRead / 2; // Numero di campioni short
+        
+        // 1. Calcolo potenza di 2 per FFT (Zero-Padding)
+        int n = 1;
+        while (n < originalN) n <<= 1; 
+
+        Complex[] x = new Complex[n];
+        for (int i = 0; i < n; i++) {
+            if (i < originalN) {
+                // Ricostruiamo lo short dai byte per l'analisi
+                short s = (short) ((byteBuffer[2 * i] & 0xFF) | (byteBuffer[2 * i + 1] << 8));
+                double normalized = s / 32768.0;
+                
+                // Finestra di Hamming per ridurre il rumore spettrale
+                double window = 0.54 - 0.46 * Math.cos(2 * Math.PI * i / (originalN - 1));
+                x[i] = new Complex(normalized * window, 0);
+            } else {
+                x[i] = new Complex(0, 0);
+            }
+        }
+
+        // 2. Calcolo FFT
+        fftResult = fft(x);
+    }
+
     private Complex[] fft(Complex[] x) {
         int n = x.length;
         if (n == 1) return new Complex[] { x[0] };
@@ -69,131 +86,86 @@ public class  SignalDecoderModule{
         return y;
     }
 
-    /**
-     * INNER CLASS COMPLEX: Gestisce la parte reale e immaginaria.
-     * Indispensabile per la FFT e coerente con la formula S = P + jQ.
-     */
-    public static class Complex {
-        public final double re; // Parte reale (es. Potenza Attiva P)
-        public final double im; // Parte immaginaria (es. Potenza Reattiva Q)
-
-        public Complex(double re, double im) {
-            this.re = re;
-            this.im = im;
-        }
-
-        public double abs() { return Math.sqrt(re * re + im * im); }
-        
-        public Complex plus(Complex b) { 
-            return new Complex(this.re + b.re, this.im + b.im); 
-        }
-        
-        public Complex minus(Complex b) { 
-            return new Complex(this.re - b.re, this.im - b.im); 
-        }
-        
-        public Complex times(Complex b) {
-            double real = this.re * b.re - this.im * b.im;
-            double imag = this.re * b.im + this.im * b.re;
-            return new Complex(real, imag);
-        }
-    }
-
     public double detectFrequency() {
-    if (fftResult == null) return 0;
+        if (fftResult == null) return 0;
 
-    int n = fftResult.length;
-    double maxMagnitude = -1;
-    int peakIndex = -1;
+        int n = fftResult.length;
+        double maxMagnitude = -1;
+        int peakIndex = -1;
 
-    for (int i = 0; i < n / 2; i++) {
-        double magnitude = fftResult[i].abs();
-        if (magnitude > maxMagnitude) {
-            maxMagnitude = magnitude;
-            peakIndex = i;
+        // Analizziamo solo la prima metà (Nyquist)
+        for (int i = 0; i < n / 2; i++) {
+            double magnitude = fftResult[i].abs();
+            if (magnitude > maxMagnitude) {
+                maxMagnitude = magnitude;
+                peakIndex = i;
+            }
         }
+        
+        this.lastMaxMagnitude = maxMagnitude;
+        return peakIndex * (samplingRate / n);
     }
-    
-    // Salviamo la magnitudo per il controllo successivo
-    this.lastMaxMagnitude = maxMagnitude;
-    double  detectedFreq = peakIndex * (samplingRate / n);
-    // Calcolo della frequenza reale
-    return  detectedFreq ;
 
-}
-public AudioEvent mapFrequencyToEvent(double freq) {
+    public AudioEvent mapFrequencyToEvent(double freq) {
+        double tolerance = 50.0;
 
-    double tolerance = 50.0;
+        // Soglia di ampiezza basata sulla FFT (regolabile)
+        if (lastMaxMagnitude < 0.01) { 
+            inStableCandidate = false;
+            stableStartTime = 0;
+            return AudioEvent.CARD_OUT;
+        }
 
-    //  Segnale debole → carta fuori
-    if (lastMaxMagnitude < 0.1) {
+        if (Math.abs(freq - 1000.0) <= tolerance) {
+            inStableCandidate = false;
+            return AudioEvent.CARD_IN;
+        }
+
+        if (Math.abs(freq - 2000.0) <= tolerance) {
+            long now = System.currentTimeMillis();
+            if (!inStableCandidate) {
+                inStableCandidate = true;
+                stableStartTime = now;
+                return AudioEvent.CARD_IN; 
+            }
+            if (now - stableStartTime >= STABLE_TIME_MS) {
+                return AudioEvent.CARD_STABLE;
+            }
+            return AudioEvent.CARD_IN;
+        }
+
         inStableCandidate = false;
-        stableStartTime = 0;
-        return AudioEvent.CARD_OUT;
+        return AudioEvent.ERROR;
     }
-
-    //  Frequenza CARD_IN (1000 Hz)
-    if (Math.abs(freq - 1000.0) <= tolerance) {
-        inStableCandidate = false;
-        stableStartTime = 0;
-        return AudioEvent.CARD_IN;
-    }
-
-    //  Frequenza candidata a STABLE (2000 Hz)
-    if (Math.abs(freq - 2000.0) <= tolerance) {
-
-        long now = System.currentTimeMillis();
-
-        if (!inStableCandidate) {
-            // Inizia timer stabilità
-            inStableCandidate = true;
-            stableStartTime = now;
-            return AudioEvent.CARD_IN; // ancora non stabile
-        }
-
-        // Se è stabile da abbastanza tempo
-        if (now - stableStartTime >= STABLE_TIME_MS) {
-            return AudioEvent.CARD_STABLE;
-        }
-
-        // Ancora in fase di stabilizzazione
-        return AudioEvent.CARD_IN;
-    }
-
-    //  Segnale presente ma non valido
-    inStableCandidate = false;
-    stableStartTime = 0;
-    return AudioEvent.ERROR;
-}
 
     public boolean validateEvent(AudioEvent event) {
+        long now = System.currentTimeMillis();
+        if (event == lastEvent) return false;
+        if (now - lastEventTime < DEBOUNCE_MS) return false;
 
-    long now = System.currentTimeMillis();
-
-    // 1️ Se è lo stesso evento dell'ultimo → ignoralo
-    if (event == lastEvent) {
-        return false;
+        lastEvent = event;
+        lastEventTime = now;
+        return true;
     }
 
-    // 2️ Se è passato troppo poco tempo → ignoralo
-    if (now - lastEventTime < DEBOUNCE_MS) {
-        return false;
+    public void resetState() {
+        lastEvent = null;
+        lastEventTime = 0;
+        lastMaxMagnitude = 0.0;
+        stableStartTime = 0;
+        inStableCandidate = false;
     }
 
-    // 3️ Evento valido → aggiorna stato
-    lastEvent = event;
-    lastEventTime = now;
-
-    return true;
+    // --- INNER CLASS COMPLEX ---
+    public static class Complex {
+        public final double re; 
+        public final double im; 
+        public Complex(double re, double im) { this.re = re; this.im = im; }
+        public double abs() { return Math.sqrt(re * re + im * im); }
+        public Complex plus(Complex b) { return new Complex(this.re + b.re, this.im + b.im); }
+        public Complex minus(Complex b) { return new Complex(this.re - b.re, this.im - b.im); }
+        public Complex times(Complex b) {
+            return new Complex(this.re * b.re - this.im * b.im, this.re * b.im + this.im * b.re);
+        }
+    }
 }
-
-public void resetState() {
-    lastEvent = null;
-    lastEventTime = 0;
-    lastMaxMagnitude = 0.0;
-    stableStartTime = 0;
-    inStableCandidate = false;
-}
-
-}
-// fix ore 14.22 errato 
