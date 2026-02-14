@@ -1,10 +1,13 @@
 package YGOscanner.core;
+import YGOscanner.audio.AudioEvent;
+
 
 public class TriggerSyncModule implements EventListener {
 
     @Override
     public void onEvent(AudioEvent event) {
         // Gestisci CARD_IN, CARD_STABLE, CARD_OUT
+        
     }
 
     public void requestCapture() {
