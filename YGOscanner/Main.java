@@ -1,7 +1,8 @@
 package YGOscanner;
 
 import YGOscanner.audio.AudioInputModule;
-import YGOscanner.audio.x;
+import YGOscanner.audio.SignalDecoderModule;
+import YGOscanner.audio.SignalDecoderModule;
 import YGOscanner.audio.AudioEvent;
 import YGOscanner.camera.CameraControlModule;
 import YGOscanner.camera.ImagePreprocessingModule;
@@ -25,7 +26,7 @@ public class Main {
 
         // 2️⃣ Core modules
         AudioInputModule audioInput = new AudioInputModule();
-        x decoder = new x();
+        SignalDecoderModule decoder = new SignalDecoderModule();
         EventDispatcher dispatcher = new EventDispatcher();
         TriggerSyncModule trigger = new TriggerSyncModule();
         CameraControlModule camera = new CameraControlModule();
