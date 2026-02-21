@@ -46,8 +46,19 @@ public void startListening() throws LineUnavailableException {
         return -1; // Ritorna -1 se la linea è chiusa
     }
 
+    /**
+     * IL METODO RICHIESTO: Controlla se il microfono è operativo.
+     */
     public boolean isInputAlive() {
-        return true;
+        // Controlla se la linea esiste, se è aperta e se sta effettivamente catturando
+        return line != null && line.isOpen() && line.isActive();
+    }
+
+    /**
+     * Ritorna il livello di riempimento del buffer interno (utile per debug)
+     */
+    public int getAvailableBytes() {
+        return (line != null) ? line.available() : 0;
     }
 }
 
