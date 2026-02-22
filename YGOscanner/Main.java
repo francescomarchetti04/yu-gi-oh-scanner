@@ -2,6 +2,7 @@ package YGOscanner;
 
 import YGOscanner.audio.AudioInputModule;
 import YGOscanner.audio.SignalDecoderModule;
+import YGOscanner.audio.SignalDecoderModule;
 import YGOscanner.audio.AudioEvent;
 import YGOscanner.camera.CameraControlModule;
 import YGOscanner.camera.ImagePreprocessingModule;
@@ -38,7 +39,7 @@ public class Main {
         // 3️⃣ Subscriptions
         dispatcher.subscribe(trigger);  // trigger ascolta eventi audio
 
-        // 4️⃣ Simulazione flusso
+        // 4️ Simulazione flusso
         System.out.println("=== Inizio simulazione flusso eventi ===");
 
         // Simuliamo un AudioEvent CARD_IN
@@ -74,7 +75,7 @@ public class Main {
 
         System.out.println("=== Fine simulazione ===");
 
-        // 5️⃣ Health check
+        // 5️ Health check
         if (!health.checkAudio() || !health.checkCamera() || !health.checkStorage()) {
             health.triggerRecovery();
         }

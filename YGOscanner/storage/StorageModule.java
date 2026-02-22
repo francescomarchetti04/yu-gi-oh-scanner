@@ -1,6 +1,10 @@
 package YGOscanner.storage;
+
 import YGOscanner.recognition.CardResult;
-import android.graphics.Bitmap;
+
+//import android.graphics.Bitmap;
+
+import YGOscanner.camera.Bitmap;
 
 public class StorageModule {
 
